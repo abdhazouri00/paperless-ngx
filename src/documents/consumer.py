@@ -684,11 +684,35 @@ class ConsumerPlugin(
             else self.working_copy
         )
 
+        new_checksum = hashlib.md5(file_for_checksum.read_bytes()).hexdigest()
+
+        # ── Version-control path: update the existing document ────────────────
+        version_of_id = getattr(self.input_doc, "version_of_id", None)
+        if version_of_id is not None:
+            document = Document.objects.get(pk=version_of_id)
+            document.content = text
+            document.mime_type = mime_type
+            document.checksum = new_checksum
+            document.created = create_date
+            document.modified = create_date
+            document.page_count = page_count
+            document.original_filename = self.filename
+            # Keep storage_type, title, tags, correspondent etc. from the
+            # existing record unless the consumer metadata explicitly overrides.
+            self.apply_overrides(document)
+            document.save()
+            self.log.info(
+                f"Version control: updated document #{document.pk} "
+                f"('{document.title}') with new content."
+            )
+            return document
+
+        # ── Normal path: create new document ─────────────────────────────────
         document = Document.objects.create(
             title=title[:127],
             content=text,
             mime_type=mime_type,
-            checksum=hashlib.md5(file_for_checksum.read_bytes()).hexdigest(),
+            checksum=new_checksum,
             created=create_date,
             modified=create_date,
             storage_type=storage_type,
@@ -810,7 +834,15 @@ class ConsumerPreflightPlugin(
 
     def pre_check_duplicate(self):
         """
-        Using the MD5 of the file, check this exact file doesn't already exist
+        Using the MD5 of the file, check this exact file doesn't already exist.
+
+        Version-control behaviour: instead of rejecting a duplicate, we archive
+        the existing document as a historical version and let consumption
+        continue.  The new upload will refresh the document's metadata (e.g.
+        added/modified timestamps) while preserving full history.
+
+        Exception: if the duplicate is soft-deleted (in the trash) we still
+        reject — the user should restore it first.
         """
         with Path(self.input_doc.original_file).open("rb") as f:
             checksum = hashlib.md5(f.read()).hexdigest()
@@ -818,19 +850,47 @@ class ConsumerPreflightPlugin(
             Q(checksum=checksum) | Q(archive_checksum=checksum),
         )
         if existing_doc.exists():
-            msg = ConsumerStatusShortMessage.DOCUMENT_ALREADY_EXISTS
-            log_msg = f"Not consuming {self.filename}: It is a duplicate of {existing_doc.get().title} (#{existing_doc.get().pk})."
+            doc = existing_doc.first()
 
-            if existing_doc.first().deleted_at is not None:
+            # Soft-deleted duplicates: still reject (user must restore first)
+            if doc.deleted_at is not None:
                 msg = ConsumerStatusShortMessage.DOCUMENT_ALREADY_EXISTS_IN_TRASH
-                log_msg += " Note: existing document is in the trash."
+                log_msg = (
+                    f"Not consuming {self.filename}: It is a duplicate of "
+                    f"{doc.title} (#{doc.pk}), which is in the trash."
+                )
+                if settings.CONSUMER_DELETE_DUPLICATES:
+                    Path(self.input_doc.original_file).unlink()
+                self._fail(msg, log_msg)
+                return
 
-            if settings.CONSUMER_DELETE_DUPLICATES:
-                Path(self.input_doc.original_file).unlink()
-            self._fail(
-                msg,
-                log_msg,
-            )
+            # Active duplicate → archive it as a version, then continue
+            try:
+                from documents.versions import archive_current_version
+                from django.db import transaction as _tx
+                with _tx.atomic():
+                    version = archive_current_version(doc)
+                self.log.info(
+                    f"Version control: archived '{doc.title}' (#{doc.pk}) "
+                    f"as version {version.version_number} before re-consuming."
+                )
+            except Exception as e:
+                self.log.warning(
+                    f"Version control: failed to archive existing document "
+                    f"#{doc.pk} as a version ({e}). Falling back to rejection."
+                )
+                if settings.CONSUMER_DELETE_DUPLICATES:
+                    Path(self.input_doc.original_file).unlink()
+                self._fail(
+                    ConsumerStatusShortMessage.DOCUMENT_ALREADY_EXISTS,
+                    f"Not consuming {self.filename}: duplicate of "
+                    f"{doc.title} (#{doc.pk}), and versioning failed.",
+                )
+                return
+
+            # Store the existing document's pk so _store() can update it
+            # rather than inserting a new record.
+            self.input_doc.version_of_id = doc.pk
 
     def pre_check_directories(self):
         """

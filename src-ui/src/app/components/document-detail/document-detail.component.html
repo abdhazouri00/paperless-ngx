@@ -340,6 +340,67 @@
           </li>
         }
 
+        <li [ngbNavItem]="DocumentDetailNavIDs.Versions">
+          <a class="text-nowrap" ngbNavLink (click)="loadVersions()" i18n>
+            Versions
+            @if (documentVersions.length) {
+              <span class="badge text-bg-secondary ms-1">{{documentVersions.length}}</span>
+            }
+          </a>
+          <ng-template ngbNavContent>
+            <div class="mb-3">
+              @if (versionsLoading) {
+                <div class="d-flex justify-content-center py-4">
+                  <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden" i18n>Loading…</span>
+                  </div>
+                </div>
+              } @else if (documentVersions.length === 0) {
+                <p class="text-muted py-3 text-center" i18n>No previous versions found.</p>
+              } @else {
+                <table class="table table-sm table-hover align-middle">
+                  <thead>
+                    <tr>
+                      <th i18n>#</th>
+                      <th i18n>Archived</th>
+                      <th i18n>Title</th>
+                      <th i18n>Pages</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (v of documentVersions; track v.id) {
+                      <tr>
+                        <td class="text-muted fw-bold">v{{v.version_number}}</td>
+                        <td class="text-nowrap">{{v.archived_at | customDate:'short'}}</td>
+                        <td class="text-truncate" style="max-width: 200px">{{v.title}}</td>
+                        <td>{{v.page_count ?? '—'}}</td>
+                        <td class="text-end text-nowrap">
+                          <button class="btn btn-sm btn-outline-secondary me-1"
+                                  (click)="downloadVersion(v.id)"
+                                  title="Download this version" i18n-title>
+                            <i-bs name="download" width="1em" height="1em"></i-bs>
+                          </button>
+                          <button class="btn btn-sm btn-outline-primary"
+                                  (click)="restoreVersion(v)"
+                                  [disabled]="versionsRestoring"
+                                  title="Restore this version" i18n-title>
+                            @if (versionsRestoring) {
+                              <div class="spinner-border spinner-border-sm" role="status"></div>
+                            } @else {
+                              <i-bs name="arrow-counterclockwise" width="1em" height="1em"></i-bs>
+                            }
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          </ng-template>
+        </li>
+
         @if (showPermissions) {
           <li [ngbNavItem]="DocumentDetailNavIDs.Permissions">
             <a ngbNavLink i18n>Permissions</a>

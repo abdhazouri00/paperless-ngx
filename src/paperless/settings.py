@@ -284,6 +284,7 @@ EMPTY_TRASH_DIR = (
 # threads.
 MEDIA_LOCK = MEDIA_ROOT / "media.lock"
 INDEX_DIR = DATA_DIR / "index"
+VERSIONS_DIR = MEDIA_ROOT / "documents" / "versions"
 
 # ─── Meilisearch ──────────────────────────────────────────────────────────────
 MEILISEARCH_ENABLED = __get_boolean("PAPERLESS_MEILISEARCH_ENABLED", "true")

@@ -58,6 +58,7 @@ from documents.models import CustomField
 from documents.models import CustomFieldInstance
 from documents.models import Document
 from documents.models import DocumentType
+from documents.models import DocumentVersion
 from documents.models import MatchingModel
 from documents.models import Note
 from documents.models import PaperlessTask
@@ -2879,3 +2880,32 @@ class StoragePathTestSerializer(SerializerWithPerms):
                 "documents.view_document",
                 Document,
             )
+
+
+# ── Document Version Control ───────────────────────────────────────────────────
+
+
+class DocumentVersionSerializer(serializers.ModelSerializer):
+    """Read-only serializer for DocumentVersion history entries."""
+
+    has_archive = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentVersion
+        fields = [
+            "id",
+            "version_number",
+            "archived_at",
+            "title",
+            "original_filename",
+            "mime_type",
+            "page_count",
+            "document_created",
+            "checksum",
+            "has_archive",
+        ]
+        read_only_fields = fields
+
+    def get_has_archive(self, obj: DocumentVersion) -> bool:
+        return bool(obj.archive_file)
+

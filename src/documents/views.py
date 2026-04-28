@@ -134,6 +134,7 @@ from documents.models import CustomField
 from documents.models import CustomFieldInstance
 from documents.models import Document
 from documents.models import DocumentType
+from documents.models import DocumentVersion
 from documents.models import Note
 from documents.models import PaperlessTask
 from documents.models import SavedView
@@ -159,6 +160,7 @@ from documents.permissions import has_perms_owner_aware
 from documents.permissions import set_permissions_for_object
 from documents.schema import generate_object_with_permissions_schema
 from documents.serialisers import AcknowledgeTasksViewSerializer
+from documents.serialisers import DocumentVersionSerializer
 from documents.serialisers import BulkDownloadSerializer
 from documents.serialisers import BulkEditObjectsSerializer
 from documents.serialisers import BulkEditSerializer
@@ -1529,6 +1531,88 @@ class UnifiedSearchViewSet(DocumentViewSet):
             "archive_serial_number__max",
         )
         return Response(max_asn + 1)
+
+    # ── Version control actions ────────────────────────────────────────────────
+
+    @action(detail=True, methods=["GET"], url_path="versions")
+    def versions(self, request, pk=None):
+        """List all historical versions of a document, newest first."""
+        document = self.get_object()
+        qs = DocumentVersion.objects.filter(document=document)
+        serializer = DocumentVersionSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["GET"], url_path=r"versions/(?P<version_pk>\d+)")
+    def version_detail(self, request, pk=None, version_pk=None):
+        """Retrieve metadata for a single historical version."""
+        document = self.get_object()
+        version = get_object_or_404(DocumentVersion, pk=version_pk, document=document)
+        return Response(DocumentVersionSerializer(version).data)
+
+    @action(
+        detail=True,
+        methods=["GET"],
+        url_path=r"versions/(?P<version_pk>\d+)/download",
+    )
+    def version_download(self, request, pk=None, version_pk=None):
+        """
+        Download the original file of a historical version.
+        Pass ?archive=1 to download the archived PDF instead (if available).
+        """
+        document = self.get_object()
+        version = get_object_or_404(DocumentVersion, pk=version_pk, document=document)
+
+        use_archive = request.query_params.get("archive", "0") == "1"
+
+        if use_archive:
+            if not version.archive_file or not version.archive_path:
+                return HttpResponseBadRequest("No archive file for this version.")
+            file_path = version.archive_path
+            content_type = "application/pdf"
+            filename = f"v{version.version_number}_{version.original_filename or 'archive'}.pdf"
+        else:
+            file_path = version.original_path
+            content_type = version.mime_type or "application/octet-stream"
+            filename = f"v{version.version_number}_{version.original_filename or 'document'}"
+
+        if not file_path.exists():
+            return HttpResponseBadRequest("Version file not found on disk.")
+
+        response = FileResponse(
+            open(file_path, "rb"),
+            content_type=content_type,
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="{filename}"'
+        )
+        return response
+
+    @action(
+        detail=True,
+        methods=["POST"],
+        url_path=r"versions/(?P<version_pk>\d+)/restore",
+    )
+    def version_restore(self, request, pk=None, version_pk=None):
+        """
+        Restore a historical version as the active document.
+        The current active state is automatically archived before restoring,
+        so no history is lost.
+        """
+        document = self.get_object()
+        version = get_object_or_404(DocumentVersion, pk=version_pk, document=document)
+
+        try:
+            from documents.versions import restore_version
+            updated_doc = restore_version(version)
+        except FileNotFoundError as e:
+            return HttpResponseBadRequest(str(e))
+        except Exception as e:
+            logger.error(f"Version restore failed for doc {document.pk}: {e}", exc_info=True)
+            return HttpResponseServerError("Restore failed, check server logs.")
+
+        return Response(
+            DocumentSerializer(updated_doc, context={"request": request}).data
+        )
 
 
 @extend_schema_view(

@@ -1647,3 +1647,84 @@ class WorkflowRun(SoftDeleteModel):
 
     def __str__(self):
         return f"WorkflowRun of {self.workflow} at {self.run_at} on {self.document}"
+
+
+# ── Document Version Control ───────────────────────────────────────────────────
+
+
+class DocumentVersion(models.Model):
+    """
+    Stores a snapshot of a Document at the moment it was superseded by a newer
+    version.  Only the *current* active version lives in the Document table;
+    every previous state is stored here.
+
+    Files are stored at:
+      VERSIONS_DIR / "{doc_pk}_{version_number}_original{ext}"
+      VERSIONS_DIR / "{doc_pk}_{version_number}_archive.pdf"
+    """
+
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="versions",
+        verbose_name=_("document"),
+    )
+
+    version_number = models.PositiveIntegerField(
+        _("version number"),
+        help_text=_("1 = first version ever stored, increments with each supersession."),
+    )
+
+    archived_at = models.DateTimeField(
+        _("archived at"),
+        auto_now_add=True,
+        db_index=True,
+        help_text=_("When this version was replaced by a newer one."),
+    )
+
+    # ── Metadata snapshot ─────────────────────────────────────────────────────
+    title = models.CharField(_("title"), max_length=128)
+    content = models.TextField(_("content"), blank=True)
+    checksum = models.CharField(_("checksum"), max_length=32)
+    archive_checksum = models.CharField(
+        _("archive checksum"), max_length=32, null=True, blank=True
+    )
+    original_filename = models.CharField(
+        _("original filename"), max_length=1024, null=True, blank=True
+    )
+    mime_type = models.CharField(_("MIME type"), max_length=256, null=True, blank=True)
+    page_count = models.PositiveIntegerField(_("page count"), null=True, blank=True)
+    document_created = models.DateField(_("document created"), null=True, blank=True)
+
+    # ── Stored file paths (relative filenames inside VERSIONS_DIR) ────────────
+    original_file = models.CharField(
+        _("original file"),
+        max_length=2048,
+        help_text=_("Filename relative to the versions directory."),
+    )
+    archive_file = models.CharField(
+        _("archive file"),
+        max_length=2048,
+        null=True,
+        blank=True,
+        help_text=_("Filename of the archived PDF, if one existed."),
+    )
+
+    class Meta:
+        ordering = ["-version_number"]
+        unique_together = [["document", "version_number"]]
+        verbose_name = _("document version")
+        verbose_name_plural = _("document versions")
+
+    def __str__(self):
+        return f"v{self.version_number} of '{self.document.title}' (archived {self.archived_at:%Y-%m-%d})"
+
+    @property
+    def original_path(self) -> Path:
+        return (settings.VERSIONS_DIR / self.original_file).resolve()
+
+    @property
+    def archive_path(self) -> Path | None:
+        if self.archive_file:
+            return (settings.VERSIONS_DIR / self.archive_file).resolve()
+        return None

@@ -40,6 +40,7 @@ import { DataType } from 'src/app/data/datatype'
 import { Document } from 'src/app/data/document'
 import { DocumentMetadata } from 'src/app/data/document-metadata'
 import { DocumentNote } from 'src/app/data/document-note'
+import { DocumentVersion } from 'src/app/data/document-version'
 import { DocumentSuggestions } from 'src/app/data/document-suggestions'
 import { DocumentType } from 'src/app/data/document-type'
 import { FilterRule } from 'src/app/data/filter-rule'
@@ -77,6 +78,7 @@ import { CustomFieldsService } from 'src/app/services/rest/custom-fields.service
 import { DocumentTypeService } from 'src/app/services/rest/document-type.service'
 import { DocumentService } from 'src/app/services/rest/document.service'
 import { SavedViewService } from 'src/app/services/rest/saved-view.service'
+import { DocumentVersionService } from 'src/app/services/rest/document-version.service'
 import { FolderService } from 'src/app/services/rest/folder.service'
 import { StoragePathService } from 'src/app/services/rest/storage-path.service'
 import { UserService } from 'src/app/services/rest/user.service'
@@ -123,6 +125,7 @@ enum DocumentDetailNavIDs {
   Notes = 5,
   Permissions = 6,
   History = 7,
+  Versions = 8,
 }
 
 enum ContentRenderType {
@@ -207,6 +210,7 @@ export class DocumentDetailComponent
   private componentRouterService = inject(ComponentRouterService)
   private deviceDetectorService = inject(DeviceDetectorService)
   private savedViewService = inject(SavedViewService)
+  private documentVersionService = inject(DocumentVersionService)
 
   @ViewChild('inputTitle')
   titleInput: TextComponent
@@ -268,6 +272,10 @@ export class DocumentDetailComponent
   ogDate: Date
 
   customFields: CustomField[]
+
+  documentVersions: DocumentVersion[] = []
+  versionsLoading: boolean = false
+  versionsRestoring: boolean = false
 
   public downloading: boolean = false
 
@@ -1276,6 +1284,45 @@ export class DocumentDetailComponent
     this.document.notes = notes
     this.openDocumentService.refreshDocument(this.documentId)
     this.savedViewService.maybeRefreshDocumentCounts()
+  }
+
+  loadVersions() {
+    this.versionsLoading = true
+    this.documentVersionService.list(this.documentId).subscribe({
+      next: (versions) => {
+        this.documentVersions = versions
+        this.versionsLoading = false
+      },
+      error: () => {
+        this.versionsLoading = false
+      },
+    })
+  }
+
+  downloadVersion(versionId: number) {
+    this.documentVersionService.download(this.documentId, versionId)
+  }
+
+  restoreVersion(version: DocumentVersion) {
+    if (this.versionsRestoring) return
+    this.versionsRestoring = true
+    this.documentVersionService.restore(this.documentId, version.id).subscribe({
+      next: () => {
+        this.versionsRestoring = false
+        this.toastService.showInfo(
+          $localize`Document restored to version ${version.version_number}`
+        )
+        // Reload the document and versions
+        this.openDocumentService.refreshDocument(this.documentId)
+        this.loadVersions()
+      },
+      error: (err) => {
+        this.versionsRestoring = false
+        this.toastService.showError(
+          $localize`Failed to restore version: ${err?.error?.detail ?? err.message}`
+        )
+      },
+    })
   }
 
   get userIsOwner(): boolean {
