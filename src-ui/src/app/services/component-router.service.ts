@@ -22,11 +22,13 @@ export class ComponentRouterService {
             event.snapshot.data.componentName &&
           !EXCLUDE_COMPONENTS.includes(event.snapshot.data.componentName)
         ) {
-          this.history.push(event.snapshot.url.toString())
+          this.history.push(event.snapshot.url.map((s) => s.path).join('/'))
           this.componentHistory.push(event.snapshot.data.componentName)
         } else {
           // Update the URL of the current component in case the same component was loaded via a different URL
-          this.history[this.history.length - 1] = event.snapshot.url.toString()
+          this.history[this.history.length - 1] = event.snapshot.url
+            .map((s) => s.path)
+            .join('/')
         }
       })
   }

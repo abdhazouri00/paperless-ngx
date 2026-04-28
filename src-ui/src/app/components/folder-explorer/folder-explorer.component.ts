@@ -11,7 +11,7 @@ import { RouterModule, ActivatedRoute, Router } from '@angular/router'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { NgxBootstrapIconsModule } from 'ngx-bootstrap-icons'
 import { Subject } from 'rxjs'
-import { first, switchMap, takeUntil } from 'rxjs/operators'
+import { first, takeUntil } from 'rxjs/operators'
 
 import { Folder } from 'src/app/data/folder'
 import { Document } from 'src/app/data/document'
@@ -21,6 +21,8 @@ import { DocumentService } from 'src/app/services/rest/document.service'
 import { ToastService } from 'src/app/services/toast.service'
 import { PageHeaderComponent } from '../common/page-header/page-header.component'
 import { DocumentTitlePipe } from 'src/app/pipes/document-title.pipe'
+import { PermissionsDialogComponent } from '../common/permissions-dialog/permissions-dialog.component'
+import { TagComponent } from '../common/tag/tag.component'
 
 @Component({
   selector: 'pngx-folder-explorer',
@@ -33,6 +35,7 @@ import { DocumentTitlePipe } from 'src/app/pipes/document-title.pipe'
     NgxBootstrapIconsModule,
     PageHeaderComponent,
     DocumentTitlePipe,
+    TagComponent,
   ],
 })
 export class FolderExplorerComponent implements OnInit, OnDestroy {
@@ -41,6 +44,7 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
   private folderService = inject(FolderService)
   private documentService = inject(DocumentService)
   private toastService = inject(ToastService)
+  private modalService = inject(NgbModal)
 
   private destroy$ = new Subject<void>()
 
@@ -56,11 +60,7 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
   loadingDocs = false
 
   // Context menu
-  contextMenu: {
-    x: number
-    y: number
-    folder: Folder | null
-  } | null = null
+  contextMenu: { x: number; y: number; folder: Folder | null } | null = null
 
   // Inline rename
   editingFolder: Folder | null = null
@@ -90,39 +90,29 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
     this.breadcrumbs = []
     this.currentFolder = null
 
-    // Load subfolders: default API returns root when no param, ?parent=id for children
-    const folderParams: Record<string, any> = this.currentFolderId
-      ? { parent: this.currentFolderId }
-      : {}
-
+    // Load subfolders using list() — listAll() caches and ignores params on repeat calls
     this.folderService
-      .listAll(null, null, folderParams)
+      .list(1, 1000, 'name', false, this.currentFolderId ? { parent: this.currentFolderId } : {})
       .pipe(first())
       .subscribe({
         next: (result) => {
-          this.subfolders = result.results.filter((f) =>
-            this.currentFolderId
-              ? f.parent === this.currentFolderId
-              : !f.parent
-          )
+          this.subfolders = result.results
           this.loadingFolders = false
         },
-        error: () => {
-          this.loadingFolders = false
-        },
+        error: () => { this.loadingFolders = false },
       })
 
     if (this.currentFolderId) {
-      // Load current folder details + build breadcrumb chain
+      // Get current folder, then iteratively walk parents for breadcrumbs
       this.folderService
         .get(this.currentFolderId)
         .pipe(first())
         .subscribe((folder) => {
           this.currentFolder = folder
-          this.buildBreadcrumbs(folder)
+          this.loadBreadcrumbs(folder)
         })
 
-      // Load documents in this folder
+      // Load documents
       this.documentService
         .listFiltered(1, 50, '-created', false, [
           { rule_type: FILTER_FOLDER, value: this.currentFolderId.toString() },
@@ -134,31 +124,40 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
             this.documentCount = result.count
             this.loadingDocs = false
           },
-          error: () => {
-            this.loadingDocs = false
-          },
+          error: () => { this.loadingDocs = false },
         })
     } else {
       this.loadingDocs = false
     }
   }
 
-  private buildBreadcrumbs(folder: Folder) {
-    // Walk the full_path to build breadcrumb: /Root/Sub/Deep → ['Root','Sub','Deep']
-    // We load a flat list and walk parent IDs
-    this.folderService
-      .listAll(null, null, { parent: 'all' })
-      .pipe(first())
-      .subscribe((result) => {
-        const all = result.results
-        const crumbs: Folder[] = []
-        let node: Folder | undefined = folder
-        while (node) {
-          crumbs.unshift(node)
-          node = node.parent ? all.find((f) => f.id === node!.parent) : undefined
-        }
-        this.breadcrumbs = crumbs
+  /**
+   * Walk up the parent chain iteratively via individual GET calls.
+   * Sets this.breadcrumbs once the full chain is resolved.
+   */
+  private loadBreadcrumbs(folder: Folder): void {
+    const crumbs: Folder[] = [folder]
+    const fetchParent = (parentId: number) => {
+      this.folderService.get(parentId).pipe(first()).subscribe({
+        next: (parent) => {
+          crumbs.unshift(parent)
+          if (parent.parent) {
+            fetchParent(parent.parent)
+          } else {
+            this.breadcrumbs = crumbs
+          }
+        },
+        error: () => {
+          // Partial breadcrumb is better than none
+          this.breadcrumbs = crumbs
+        },
       })
+    }
+    if (folder.parent) {
+      fetchParent(folder.parent)
+    } else {
+      this.breadcrumbs = crumbs
+    }
   }
 
   openFolder(folder: Folder) {
@@ -183,7 +182,7 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent) {
+  onDocumentClick(_event: MouseEvent) {
     this.contextMenu = null
   }
 
@@ -201,35 +200,24 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
     this.cancelEdit()
     this.isCreating = true
     this.newFolderName = ''
-    // Focus the input next tick
-    setTimeout(() => {
-      const el = document.getElementById('new-folder-input')
-      el?.focus()
-    })
+    setTimeout(() => document.getElementById('new-folder-input')?.focus())
   }
 
   confirmCreate() {
     const name = this.newFolderName.trim()
-    if (!name) {
-      this.cancelCreate()
-      return
-    }
+    if (!name) { this.cancelCreate(); return }
     const payload: Partial<Folder> = { name }
     if (this.currentFolderId) payload.parent = this.currentFolderId
 
-    this.folderService
-      .create(payload as Folder)
-      .pipe(first())
-      .subscribe({
-        next: () => {
-          this.isCreating = false
-          this.newFolderName = ''
-          this.folderService.clearCache()
-          this.load()
-        },
-        error: () =>
-          this.toastService.showError($localize`Error creating folder`),
-      })
+    this.folderService.create(payload as Folder).pipe(first()).subscribe({
+      next: () => {
+        this.isCreating = false
+        this.newFolderName = ''
+        this.folderService.clearCache()
+        this.load()
+      },
+      error: () => this.toastService.showError($localize`Error creating folder`),
+    })
   }
 
   cancelCreate() {
@@ -245,31 +233,22 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
     this.editingFolder = folder
     this.editingName = folder.name
     setTimeout(() => {
-      const el = document.getElementById(`edit-input-${folder.id}`)
-      if (el) {
-        ;(el as HTMLInputElement).select()
-      }
+      const el = document.getElementById(`edit-input-${folder.id}`) as HTMLInputElement
+      el?.select()
     })
   }
 
   confirmEdit() {
     const name = this.editingName.trim()
-    if (!name || !this.editingFolder) {
-      this.cancelEdit()
-      return
-    }
-    this.folderService
-      .patch({ ...this.editingFolder, name } as Folder)
-      .pipe(first())
-      .subscribe({
-        next: () => {
-          this.editingFolder = null
-          this.folderService.clearCache()
-          this.load()
-        },
-        error: () =>
-          this.toastService.showError($localize`Error renaming folder`),
-      })
+    if (!name || !this.editingFolder) { this.cancelEdit(); return }
+    this.folderService.patch({ ...this.editingFolder, name } as Folder).pipe(first()).subscribe({
+      next: () => {
+        this.editingFolder = null
+        this.folderService.clearCache()
+        this.load()
+      },
+      error: () => this.toastService.showError($localize`Error renaming folder`),
+    })
   }
 
   cancelEdit() {
@@ -281,28 +260,40 @@ export class FolderExplorerComponent implements OnInit, OnDestroy {
 
   deleteFolder(folder: Folder) {
     this.contextMenu = null
-    if (
-      !confirm(
-        $localize`Delete folder "${folder.name}"? Sub-folders will also be deleted. Documents will remain but lose their folder assignment.`
-      )
-    )
+    if (!confirm($localize`Delete folder "${folder.name}"? Sub-folders will also be deleted. Documents will remain but lose their folder assignment.`))
       return
 
-    this.folderService
-      .delete(folder)
-      .pipe(first())
-      .subscribe({
+    this.folderService.delete(folder).pipe(first()).subscribe({
+      next: () => {
+        this.folderService.clearCache()
+        folder.id === this.currentFolderId
+          ? this.router.navigate(['/folders'])
+          : this.load()
+      },
+      error: () => this.toastService.showError($localize`Error deleting folder`),
+    })
+  }
+
+  // ── Permissions ────────────────────────────────────────────────────────────
+
+  editPermissions(folder: Folder) {
+    this.contextMenu = null
+    const modal = this.modalService.open(PermissionsDialogComponent, { backdrop: 'static' })
+    const dialog = modal.componentInstance as PermissionsDialogComponent
+    dialog.object = folder
+    modal.componentInstance.confirmClicked.pipe(first()).subscribe(({ permissions }) => {
+      modal.componentInstance.buttonsEnabled = false
+      const updated = { ...folder } as any
+      updated.owner = permissions['owner']
+      updated['set_permissions'] = permissions['set_permissions']
+      this.folderService.patch(updated).pipe(first()).subscribe({
         next: () => {
-          this.folderService.clearCache()
-          // If we deleted the current folder, go up
-          if (folder.id === this.currentFolderId) {
-            this.router.navigate(['/folders'])
-          } else {
-            this.load()
-          }
+          this.toastService.showInfo($localize`Folder permissions updated`)
+          modal.close()
+          this.load()
         },
-        error: () =>
-          this.toastService.showError($localize`Error deleting folder`),
+        error: (e) => this.toastService.showError($localize`Error updating permissions`, e),
       })
+    })
   }
 }
