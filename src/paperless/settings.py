@@ -284,6 +284,12 @@ EMPTY_TRASH_DIR = (
 # threads.
 MEDIA_LOCK = MEDIA_ROOT / "media.lock"
 INDEX_DIR = DATA_DIR / "index"
+
+# ─── Meilisearch ──────────────────────────────────────────────────────────────
+MEILISEARCH_ENABLED = __get_boolean("PAPERLESS_MEILISEARCH_ENABLED", "true")
+MEILISEARCH_URL = os.getenv("PAPERLESS_MEILISEARCH_URL", "http://meilisearch:7700")
+MEILISEARCH_MASTER_KEY = os.getenv("PAPERLESS_MEILISEARCH_MASTER_KEY", "changeme")
+MEILISEARCH_INDEX_NAME = os.getenv("PAPERLESS_MEILISEARCH_INDEX_NAME", "documents")
 MODEL_FILE = __get_path(
     "PAPERLESS_MODEL_FILE",
     DATA_DIR / "classification_model.pickle",

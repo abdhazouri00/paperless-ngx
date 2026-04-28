@@ -1425,6 +1425,22 @@ class UnifiedSearchViewSet(DocumentViewSet):
 
     def list(self, request, *args, **kwargs):
         if self._is_search_request():
+            # ── Meilisearch path ───────────────────────────────────────────
+            # Only used for plain text ?query= searches (not more_like_id).
+            query_str = request.query_params.get("query", "").strip()
+            if query_str and "more_like_id" not in request.query_params:
+                try:
+                    meili_result = self._list_from_meilisearch(
+                        request, query_str, *args, **kwargs
+                    )
+                    if meili_result is not None:
+                        return meili_result
+                except Exception as e:
+                    logger.warning(
+                        f"Meilisearch list failed, falling back to Whoosh: {e}"
+                    )
+
+            # ── Whoosh fallback path ───────────────────────────────────────
             from documents import index
 
             try:
@@ -1454,6 +1470,56 @@ class UnifiedSearchViewSet(DocumentViewSet):
                 )
         else:
             return super().list(request)
+
+    def _list_from_meilisearch(self, request, query_str, *args, **kwargs):
+        """
+        Execute the search via Meilisearch and return a DRF Response, or
+        return None to signal that the caller should fall back to Whoosh.
+
+        Results are returned using the existing DocumentSerializer (not
+        SearchResultSerializer) because Meilisearch hits are not Whoosh Hit
+        objects. The __search_hit__ metadata block is still included so the
+        frontend receives score/rank/highlights in the same shape.
+        """
+        from documents.meili import search as meili_search
+
+        page_size = self.paginator.get_page_size(request)
+        ordered_ids, total = meili_search(query_str, request.user, page_size=page_size * 5)
+
+        if ordered_ids is None:
+            # Meilisearch unavailable — signal fallback
+            return None
+
+        if not ordered_ids:
+            # Valid empty result — return empty paginated response
+            from rest_framework.response import Response as DRFResponse
+            return self.get_paginated_response([])
+
+        # Filter the DB-permission-enforced queryset to only matching IDs,
+        # preserving Meilisearch relevance order via a CASE expression.
+        base_qs = super(UnifiedSearchViewSet, self).filter_queryset(
+            self.get_queryset()
+        )
+        preserved_order = Case(
+            *[When(pk=pk, then=pos) for pos, pk in enumerate(ordered_ids)],
+            output_field=IntegerField(),
+        )
+        queryset = base_qs.filter(pk__in=ordered_ids).order_by(preserved_order)
+
+        page = self.paginate_queryset(queryset)
+        if page is None:
+            page = list(queryset[:page_size])
+
+        # Use the standard DocumentSerializer — no Whoosh Hit objects needed.
+        serializer = DocumentSerializer(
+            page,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        response = self.get_paginated_response(serializer.data)
+        response.data["corrected_query"] = None
+        response.data["search_engine"] = "meilisearch"
+        return response
 
     @action(detail=False, methods=["GET"], name="Get Next ASN")
     def next_asn(self, request, *args, **kwargs):

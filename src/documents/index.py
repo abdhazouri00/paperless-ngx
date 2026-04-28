@@ -234,11 +234,17 @@ def remove_document_by_id(writer: AsyncWriter, doc_id) -> None:
 def add_or_update_document(document: Document) -> None:
     with open_index_writer() as writer:
         update_document(writer, document)
+    # Mirror to Meilisearch (fire-and-forget; failures are logged, not raised)
+    from documents.meili import index_document as meili_index_document
+    meili_index_document(document)
 
 
 def remove_document_from_index(document: Document) -> None:
     with open_index_writer() as writer:
         remove_document(writer, document)
+    # Mirror to Meilisearch
+    from documents.meili import delete_document as meili_delete_document
+    meili_delete_document(document.pk)
 
 
 class MappedDocIdSet(DocIdSet):
