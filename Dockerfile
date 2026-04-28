@@ -140,6 +140,7 @@ ARG RUNTIME_PACKAGES="\
   # OCRmyPDF dependencies
   tesseract-ocr \
   tesseract-ocr-eng \
+  tesseract-ocr-ara \
   tesseract-ocr-deu \
   tesseract-ocr-fra \
   tesseract-ocr-ita \
@@ -177,6 +178,27 @@ RUN set -eux \
       && echo "Cleaning up image layer" \
         && rm --force --verbose *.deb \
     && rm --recursive --force --verbose /var/lib/apt/lists/*
+
+# ── Upgrade Tesseract models to tessdata_best for Arabic + English ─────────────
+# The apt package (tesseract-ocr-ara) ships the 1.4 MB standard model (2019).
+# tessdata_best ships a 13 MB LSTM model that is dramatically more accurate,
+# especially for right-to-left Arabic text and mixed Arabic/English documents.
+# We also upgrade the English model so mixed-language accuracy is maximised.
+RUN set -eux \
+  && TESSDATA=/usr/share/tesseract-ocr/5/tessdata \
+  && echo "Upgrading Arabic tessdata to tessdata_best" \
+    && curl --fail --silent --show-error --location \
+      "https://github.com/tesseract-ocr/tessdata_best/raw/main/ara.traineddata" \
+      -o "${TESSDATA}/ara.traineddata" \
+  && echo "Upgrading English tessdata to tessdata_best" \
+    && curl --fail --silent --show-error --location \
+      "https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata" \
+      -o "${TESSDATA}/eng.traineddata" \
+  && echo "Creating Arabic-optimised Tesseract config" \
+    && printf 'preserve_interword_spaces 1\n' \
+      > "${TESSDATA}/configs/arabic_paperless" \
+  && echo "Tesseract model sizes:" \
+    && ls -lh "${TESSDATA}/"*.traineddata
 
 WORKDIR /usr/src/paperless/src/
 

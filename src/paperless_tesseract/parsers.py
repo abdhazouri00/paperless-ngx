@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -462,11 +463,22 @@ def post_process_text(text):
     if not text:
         return None
 
+    # ── Arabic / Unicode normalisation ────────────────────────────────────────
+    # NFKC converts Arabic Presentation Forms (U+FB50–U+FDFF, U+FE70–U+FEFF)
+    # to their standard Arabic equivalents (U+0600–U+06FF).  These presentation
+    # form codepoints are what Tesseract sometimes emits for Arabic glyphs and
+    # they break search, storage and display if left unconverted.
+    text = unicodedata.normalize("NFKC", text)
+
+    # Remove zero-width and direction-control characters that OCR engines
+    # occasionally insert around Arabic text (ZWSP, ZWNJ, ZWJ, LRM, RLM, BOM).
+    text = re.sub(r"[\u200b\u200c\u200d\u200e\u200f\ufeff]", "", text)
+
+    # ── Standard whitespace cleanup ───────────────────────────────────────────
     collapsed_spaces = re.sub(r"([^\S\r\n]+)", " ", text)
     no_leading_whitespace = re.sub(r"([\n\r]+)([^\S\n\r]+)", "\\1", collapsed_spaces)
     no_trailing_whitespace = re.sub(r"([^\S\n\r]+)$", "", no_leading_whitespace)
 
-    # TODO: this needs a rework
     # replace \0 prevents issues with saving to postgres.
     # text may contain \0 when this character is present in PDF files.
     return no_trailing_whitespace.strip().replace("\0", " ")
