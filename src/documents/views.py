@@ -2507,16 +2507,20 @@ class FolderViewSet(PermissionsAwareDocumentCountMixin, ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        parent_param = self.request.query_params.get("parent", None)
-        if parent_param is None:
-            # Default: root folders only
-            qs = qs.filter(parent__isnull=True)
-        elif parent_param == "all":
-            # Return full flat list for client-side tree building
-            pass
-        else:
-            # Children of a specific folder
-            qs = qs.filter(parent_id=parent_param)
+        # Only apply parent filtering on list actions.
+        # Detail actions (retrieve, update, destroy) must see all folders by ID
+        # or child folders would return 404.
+        if self.action == "list":
+            parent_param = self.request.query_params.get("parent", None)
+            if parent_param is None:
+                # Default: root folders only
+                qs = qs.filter(parent__isnull=True)
+            elif parent_param == "all":
+                # Return full flat list for client-side tree building
+                pass
+            else:
+                # Children of a specific folder
+                qs = qs.filter(parent_id=parent_param)
         return qs
 
 
