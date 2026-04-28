@@ -23,7 +23,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 110px;
+  width: 120px;
   padding: 10px 8px 10px;
   border-radius: 8px;
   cursor: pointer;
@@ -59,6 +59,14 @@
 
 .folder-icon {
   color: var(--bs-warning);
+
+  // ::ng-deep pierces Angular's view encapsulation so we can size
+  // the actual <svg> element that i-bs renders internally.
+  // CSS width/height on an SVG element overrides any inline width/height attributes.
+  ::ng-deep svg {
+    width: 96px !important;
+    height: 96px !important;
+  }
 }
 
 .doc-count-badge {
