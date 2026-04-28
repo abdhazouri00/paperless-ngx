@@ -80,11 +80,11 @@
           shortcutKey="i"></pngx-filterable-dropdown>
         }
 
-        @if (permissionsService.currentUserCan(PermissionAction.View, PermissionType.Folder) && folderSelectionModel.items.length > 0) {
+        @if (permissionsService.currentUserCan(PermissionAction.View, PermissionType.Folder) && folders.length > 0) {
           <pngx-folder-filter-dropdown
             class="flex-fill fade"
             [class.show]="show"
-            [folders]="folderSelectionModel.items"
+            [folders]="folders"
             [selectedId]="activeFolderId"
             [disabled]="disabled"
             (folderSelected)="onFolderFilterSelected($event)">

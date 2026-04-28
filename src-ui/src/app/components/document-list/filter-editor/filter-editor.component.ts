@@ -94,6 +94,7 @@ import {
 } from 'src/app/services/rest/document.service'
 import { SearchService } from 'src/app/services/rest/search.service'
 import { FolderService } from 'src/app/services/rest/folder.service'
+import { Folder } from 'src/app/data/folder'
 import { StoragePathService } from 'src/app/services/rest/storage-path.service'
 import { TagService } from 'src/app/services/rest/tag.service'
 import {
@@ -408,6 +409,7 @@ export class FilterEditorComponent
   documentTypeSelectionModel = new FilterableDropdownSelectionModel()
   storagePathSelectionModel = new FilterableDropdownSelectionModel()
   folderSelectionModel = new FilterableDropdownSelectionModel()
+  folders: Folder[] = []
   customFieldQueriesModel = new CustomFieldQueriesModel()
 
   dateCreatedTo: string
@@ -1292,6 +1294,7 @@ export class FilterEditorComponent
     ) {
       this.loadingCountTotal++
       this.folderService.listAll(null, null, { parent: 'all' }).subscribe((result) => {
+        this.folders = result.results
         this.folderSelectionModel.items = result.results
         this.maybeCompleteLoading()
       })
