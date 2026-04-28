@@ -67,10 +67,17 @@
     width: 96px !important;
     height: 96px !important;
   }
-  svg{
-    width: 96px !important;
-    height: 96px !important;
-  }
+}
+
+pngx-folder-explorer .bi {
+    width: 2rem !important;  /* Adjust size as needed */
+    height: 2rem !important;
+    font-size: 2rem;         /* Some icons respond to font-size */
+}
+
+svg.bi path {
+    transform: scale(1.5);   /* Manually scale the path if width/height fails */
+    transform-origin: center;
 }
 
 .doc-count-badge {
