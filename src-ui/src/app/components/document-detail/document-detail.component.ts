@@ -665,6 +665,10 @@ export class DocumentDetailComponent
         this.documentId,
         foundNavIDkey.toLowerCase(),
       ])
+    // Refresh versions list every time the tab is activated
+    if (navChangeEvent.nextId === DocumentDetailNavIDs.Versions) {
+      this.loadVersions()
+    }
   }
 
   updateComponent(doc: Document) {
@@ -731,6 +735,8 @@ export class DocumentDetailComponent
     }
     this.title = this.documentTitlePipe.transform(doc.title)
     this.prepareForm(doc)
+    // Always pre-load versions so the badge count shows immediately
+    this.loadVersions()
   }
 
   get customFieldFormFields(): FormArray {
@@ -1301,6 +1307,10 @@ export class DocumentDetailComponent
 
   downloadVersion(versionId: number) {
     this.documentVersionService.download(this.documentId, versionId)
+  }
+
+  downloadVersionArchive(versionId: number) {
+    this.documentVersionService.downloadArchive(this.documentId, versionId)
   }
 
   restoreVersion(version: DocumentVersion) {

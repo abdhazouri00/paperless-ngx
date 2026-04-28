@@ -22,6 +22,10 @@ export class DocumentVersionService {
     window.open(this.baseUrl(documentId, `${versionId}/download/`), '_blank')
   }
 
+  downloadArchive(documentId: number, versionId: number): void {
+    window.open(this.baseUrl(documentId, `${versionId}/download/?archive=1`), '_blank')
+  }
+
   restore(documentId: number, versionId: number): Observable<any> {
     return this.http.post(this.baseUrl(documentId, `${versionId}/restore/`), {})
   }

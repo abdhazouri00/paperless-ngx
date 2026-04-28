@@ -341,7 +341,7 @@
         }
 
         <li [ngbNavItem]="DocumentDetailNavIDs.Versions">
-          <a class="text-nowrap" ngbNavLink (click)="loadVersions()" i18n>
+          <a class="text-nowrap" ngbNavLink i18n>
             Versions
             @if (documentVersions.length) {
               <span class="badge text-bg-secondary ms-1">{{documentVersions.length}}</span>
@@ -356,46 +356,64 @@
                   </div>
                 </div>
               } @else if (documentVersions.length === 0) {
-                <p class="text-muted py-3 text-center" i18n>No previous versions found.</p>
+                <div class="text-center py-4 text-muted">
+                  <i-bs name="clock-history" width="2em" height="2em" class="mb-2 d-block mx-auto"></i-bs>
+                  <p class="mb-0" i18n>No previous versions. Upload the same file again to create a version history.</p>
+                </div>
               } @else {
-                <table class="table table-sm table-hover align-middle">
-                  <thead>
-                    <tr>
-                      <th i18n>#</th>
-                      <th i18n>Archived</th>
-                      <th i18n>Title</th>
-                      <th i18n>Pages</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (v of documentVersions; track v.id) {
-                      <tr>
-                        <td class="text-muted fw-bold">v{{v.version_number}}</td>
-                        <td class="text-nowrap">{{v.archived_at | customDate:'short'}}</td>
-                        <td class="text-truncate" style="max-width: 200px">{{v.title}}</td>
-                        <td>{{v.page_count ?? '—'}}</td>
-                        <td class="text-end text-nowrap">
-                          <button class="btn btn-sm btn-outline-secondary me-1"
-                                  (click)="downloadVersion(v.id)"
-                                  title="Download this version" i18n-title>
+                <p class="text-muted small mb-3" i18n>
+                  {{documentVersions.length}} archived version(s). Click <strong>Restore</strong> to make a version the active document.
+                </p>
+                @for (v of documentVersions; track v.id) {
+                  <div class="card mb-2">
+                    <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+                      <div class="flex-shrink-0 text-center" style="min-width:3rem">
+                        <span class="badge bg-secondary fs-6">v{{v.version_number}}</span>
+                      </div>
+                      <div class="flex-grow-1 overflow-hidden">
+                        <div class="fw-semibold text-truncate">{{v.title}}</div>
+                        <div class="text-muted small">
+                          <i-bs name="calendar3" width="0.85em" height="0.85em" class="me-1"></i-bs>
+                          <span i18n>Archived</span> {{v.archived_at | customDate:'relative'}}
+                          &nbsp;·&nbsp;
+                          <span>{{v.original_filename}}</span>
+                          @if (v.page_count) {
+                            &nbsp;·&nbsp; {{v.page_count}} <span i18n>pages</span>
+                          }
+                        </div>
+                      </div>
+                      <div class="flex-shrink-0 d-flex gap-1">
+                        <div ngbDropdown placement="bottom-end">
+                          <button class="btn btn-sm btn-outline-secondary" ngbDropdownToggle
+                                  title="Download" i18n-title>
                             <i-bs name="download" width="1em" height="1em"></i-bs>
                           </button>
-                          <button class="btn btn-sm btn-outline-primary"
-                                  (click)="restoreVersion(v)"
-                                  [disabled]="versionsRestoring"
-                                  title="Restore this version" i18n-title>
-                            @if (versionsRestoring) {
-                              <div class="spinner-border spinner-border-sm" role="status"></div>
-                            } @else {
-                              <i-bs name="arrow-counterclockwise" width="1em" height="1em"></i-bs>
+                          <div ngbDropdownMenu class="shadow">
+                            <button ngbDropdownItem (click)="downloadVersion(v.id)" i18n>
+                              Download original
+                            </button>
+                            @if (v.has_archive) {
+                              <button ngbDropdownItem (click)="downloadVersionArchive(v.id)" i18n>
+                                Download archived PDF
+                              </button>
                             }
-                          </button>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary"
+                                (click)="restoreVersion(v)"
+                                [disabled]="versionsRestoring"
+                                title="Restore this version as the active document" i18n-title>
+                          @if (versionsRestoring) {
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                          } @else {
+                            <i-bs name="arrow-counterclockwise" width="1em" height="1em"></i-bs>
+                          }
+                          <span class="ms-1 d-none d-lg-inline" i18n>Restore</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
               }
             </div>
           </ng-template>
