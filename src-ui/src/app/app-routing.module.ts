@@ -19,6 +19,7 @@ import { SavedViewsComponent } from './components/manage/saved-views/saved-views
 import { StoragePathListComponent } from './components/manage/storage-path-list/storage-path-list.component'
 import { TagListComponent } from './components/manage/tag-list/tag-list.component'
 import { WorkflowsComponent } from './components/manage/workflows/workflows.component'
+import { FolderExplorerComponent } from './components/folder-explorer/folder-explorer.component'
 import { NotFoundComponent } from './components/not-found/not-found.component'
 import { DirtyDocGuard } from './guards/dirty-doc.guard'
 import { DirtyFormGuard } from './guards/dirty-form.guard'
@@ -54,6 +55,30 @@ export const routes: Routes = [
             type: PermissionType.Document,
           },
           componentName: 'DocumentListComponent',
+        },
+      },
+      {
+        path: 'folders',
+        component: FolderExplorerComponent,
+        canActivate: [PermissionsGuard],
+        data: {
+          requiredPermission: {
+            action: PermissionAction.View,
+            type: PermissionType.Folder,
+          },
+          componentName: 'FolderExplorerComponent',
+        },
+      },
+      {
+        path: 'folders/:id',
+        component: FolderExplorerComponent,
+        canActivate: [PermissionsGuard],
+        data: {
+          requiredPermission: {
+            action: PermissionAction.View,
+            type: PermissionType.Folder,
+          },
+          componentName: 'FolderExplorerComponent',
         },
       },
       {

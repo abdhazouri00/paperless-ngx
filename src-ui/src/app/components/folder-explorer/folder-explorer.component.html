@@ -1,0 +1,179 @@
+<pngx-page-header [title]="currentFolder ? currentFolder.name : 'Folders'" i18n-title>
+  <button class="btn btn-sm btn-outline-primary" (click)="startCreate()">
+    <i-bs name="folder-plus" class="me-1"></i-bs>
+    <ng-container i18n>New folder</ng-container>
+  </button>
+</pngx-page-header>
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a routerLink="/folders" i18n>Folders</a>
+    </li>
+    @for (crumb of breadcrumbs; track crumb.id; let last = $last) {
+      <li class="breadcrumb-item" [class.active]="last">
+        @if (!last) {
+          <a [routerLink]="['/folders', crumb.id]">{{ crumb.name }}</a>
+        } @else {
+          {{ crumb.name }}
+        }
+      </li>
+    }
+  </ol>
+</nav>
+
+<!-- Explorer area -->
+<div
+  class="explorer-area"
+  (contextmenu)="onAreaRightClick($event)"
+>
+
+  <!-- Loading state -->
+  @if (loadingFolders) {
+    <div class="text-muted d-flex align-items-center gap-2 py-4">
+      <div class="spinner-border spinner-border-sm"></div>
+      <span i18n>Loading folders…</span>
+    </div>
+  }
+
+  <!-- Subfolders section -->
+  @if (!loadingFolders && (subfolders.length > 0 || isCreating)) {
+    <section class="mb-4">
+      @if (currentFolder || documents.length > 0) {
+        <h6 class="section-label text-muted mb-2" i18n>Folders</h6>
+      }
+      <div class="folder-grid">
+        @for (folder of subfolders; track folder.id) {
+          <div
+            class="folder-tile"
+            [class.editing]="editingFolder?.id === folder.id"
+            (click)="openFolder(folder)"
+            (contextmenu)="onFolderRightClick($event, folder)"
+            (dblclick)="openFolder(folder)"
+          >
+            <div class="folder-icon-wrap">
+              <i-bs name="folder2" class="folder-icon"></i-bs>
+              @if (folder.document_count) {
+                <span class="doc-count-badge">{{ folder.document_count }}</span>
+              }
+            </div>
+            @if (editingFolder?.id === folder.id) {
+              <input
+                [id]="'edit-input-' + folder.id"
+                class="form-control form-control-sm folder-name-input"
+                [(ngModel)]="editingName"
+                (keyup.enter)="confirmEdit()"
+                (keyup.escape)="cancelEdit()"
+                (click)="$event.stopPropagation()"
+                (blur)="confirmEdit()"
+              />
+            } @else {
+              <span class="folder-name text-truncate">{{ folder.name }}</span>
+            }
+          </div>
+        }
+
+        <!-- New folder tile (inline create) -->
+        @if (isCreating) {
+          <div class="folder-tile creating">
+            <div class="folder-icon-wrap">
+              <i-bs name="folder-plus" class="folder-icon text-primary"></i-bs>
+            </div>
+            <input
+              id="new-folder-input"
+              class="form-control form-control-sm folder-name-input"
+              [(ngModel)]="newFolderName"
+              placeholder="Folder name"
+              i18n-placeholder
+              (keyup.enter)="confirmCreate()"
+              (keyup.escape)="cancelCreate()"
+              (blur)="confirmCreate()"
+              (click)="$event.stopPropagation()"
+            />
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Empty folder grid + create -->
+  @if (!loadingFolders && subfolders.length === 0 && !isCreating && !currentFolder) {
+    <div class="empty-state text-center py-5 text-muted">
+      <i-bs name="folder2-open" class="empty-icon mb-3"></i-bs>
+      <p class="mb-2" i18n>No folders yet.</p>
+      <button class="btn btn-outline-primary btn-sm" (click)="startCreate()" i18n>
+        Create your first folder
+      </button>
+    </div>
+  }
+
+  <!-- Documents section -->
+  @if (currentFolder) {
+    <section>
+      <h6 class="section-label text-muted mb-2">
+        <ng-container i18n>Documents</ng-container>
+        @if (documentCount > 0) {
+          <span class="badge bg-secondary ms-2">{{ documentCount }}</span>
+        }
+      </h6>
+
+      @if (loadingDocs) {
+        <div class="text-muted d-flex align-items-center gap-2 py-3">
+          <div class="spinner-border spinner-border-sm"></div>
+          <span i18n>Loading documents…</span>
+        </div>
+      } @else if (documents.length === 0) {
+        <p class="text-muted small" i18n>No documents in this folder.</p>
+      } @else {
+        <div class="doc-list">
+          @for (doc of documents; track doc.id) {
+            <div
+              class="doc-row d-flex align-items-center gap-3"
+              (click)="openDocument(doc)"
+              role="button"
+            >
+              <i-bs name="file-earmark-text" class="doc-icon text-muted flex-shrink-0"></i-bs>
+              <span class="flex-grow-1 text-truncate doc-title">{{ doc | documentTitle }}</span>
+              <span class="text-muted small flex-shrink-0">
+                {{ doc.created | date:'mediumDate' }}
+              </span>
+            </div>
+          }
+          @if (documentCount > documents.length) {
+            <p class="text-muted small mt-2">
+              <ng-container i18n>Showing {{ documents.length }} of {{ documentCount }} documents.</ng-container>
+              <a [routerLink]="['/documents']" class="ms-1" i18n>View all</a>
+            </p>
+          }
+        </div>
+      }
+    </section>
+  }
+</div>
+
+<!-- Right-click context menu -->
+@if (contextMenu) {
+  <div
+    class="context-menu shadow-sm"
+    [style.left.px]="contextMenu.x"
+    [style.top.px]="contextMenu.y"
+    (click)="$event.stopPropagation()"
+  >
+    <button class="context-item" (click)="startCreate()">
+      <i-bs name="folder-plus" class="me-2"></i-bs>
+      <ng-container i18n>New folder</ng-container>
+    </button>
+    @if (contextMenu.folder) {
+      <hr class="context-divider" />
+      <button class="context-item" (click)="startEdit(contextMenu.folder)">
+        <i-bs name="pencil" class="me-2"></i-bs>
+        <ng-container i18n>Rename</ng-container>
+      </button>
+      <button class="context-item text-danger" (click)="deleteFolder(contextMenu.folder)">
+        <i-bs name="trash" class="me-2"></i-bs>
+        <ng-container i18n>Delete</ng-container>
+      </button>
+    }
+  </div>
+}

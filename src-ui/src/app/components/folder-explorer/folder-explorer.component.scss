@@ -1,0 +1,171 @@
+.explorer-area {
+  min-height: 300px;
+  position: relative;
+  padding-bottom: 2rem;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+// ── Folder grid ──────────────────────────────────────────────────────────────
+
+.folder-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.folder-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100px;
+  padding: 10px 8px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s;
+  position: relative;
+
+  &:hover {
+    background-color: var(--bs-tertiary-bg);
+  }
+
+  &:active,
+  &.selected {
+    background-color: var(--bs-primary-bg-subtle);
+  }
+
+  &.editing {
+    background-color: var(--bs-tertiary-bg);
+    cursor: default;
+  }
+
+  &.creating {
+    cursor: default;
+    opacity: 0.85;
+  }
+}
+
+.folder-icon-wrap {
+  position: relative;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.folder-icon {
+  font-size: 3rem; // ~48px
+  width: 48px;
+  height: 48px;
+  color: var(--bs-warning);
+}
+
+.doc-count-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -6px;
+  background: var(--bs-secondary);
+  color: #fff;
+  font-size: 0.6rem;
+  border-radius: 20px;
+  padding: 1px 5px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.folder-name {
+  font-size: 0.8rem;
+  max-width: 92px;
+  text-align: center;
+  display: block;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.folder-name-input {
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 2px 4px;
+  width: 92px;
+}
+
+// ── Document list ─────────────────────────────────────────────────────────────
+
+.doc-list {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+}
+
+.doc-row {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--bs-border-color);
+  transition: background-color 0.1s;
+  cursor: pointer;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background-color: var(--bs-tertiary-bg);
+  }
+}
+
+.doc-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.doc-title {
+  font-size: 0.9rem;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+.empty-state {
+  .empty-icon {
+    font-size: 4rem;
+    width: 64px;
+    height: 64px;
+    opacity: 0.3;
+  }
+}
+
+// ── Context menu ──────────────────────────────────────────────────────────────
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 170px;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  padding: 4px 0;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background-color: var(--bs-tertiary-bg);
+  }
+}
+
+.context-divider {
+  margin: 3px 0;
+  border-color: var(--bs-border-color);
+}
